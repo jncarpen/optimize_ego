@@ -1,4 +1,4 @@
-function plot_vectorMod(out)
+function plotMe(out)
 warning('off', 'all')
 % reshape vectors, @todo use phase angle instead of peak?
 % +180 brings 'forward' to 'up' (not sure what to do here)

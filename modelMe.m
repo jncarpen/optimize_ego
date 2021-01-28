@@ -1,4 +1,4 @@
-function [out] = modelMe_V2(P, ST, Z)
+function [out] = modelMe(P, ST, Z)
 %MODELME_V2 
 %   INPUTS -
 %   P:         position vector [t, x1, y1, x2, y2];
