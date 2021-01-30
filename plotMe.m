@@ -1,7 +1,6 @@
 function plotMe(out)
+
 warning('off', 'all')
-% reshape vectors, @todo use phase angle instead of peak?
-% +180 brings 'forward' to 'up' (not sure what to do here)
 pred_val = out.measures.mu.RH;
 data_val = out.measures.mu.HD;
 
@@ -48,7 +47,7 @@ xlim([0 11]); ylim([0 11]);
 modelVecs = quiver(binX, binY, uprime_data, vprime_data, 0);
 set(modelVecs, 'Color', 'blue', 'AutoScale', 'off', 'LineWidth',1)
 
-plot model vectors
+% plot model vectors
 modelVecs = quiver(binX, binY, uprime, vprime, 0);
 set(modelVecs, 'Color', 'r', 'AutoScale', 'off', 'LineWidth',1)
 
@@ -57,8 +56,3 @@ pbaspect([1 1 1])
 warning('on', 'all')
 
 end
-
-% % streamline
-% startx = ones(10,1)*5;
-% starty = ones(10,1)*5;
-% streamline(binX, binY, uprime_data, vprime_data, startx, starty)

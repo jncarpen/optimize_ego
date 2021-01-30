@@ -163,19 +163,14 @@ options = optimset('Display','off','TolX',1e-8,'TolFun',1e-8);
     pFitLM,options);
 
 % get model-predicted firing rates for best-fit parameters
-[R_xyh_model, VE_model] = get_Rxyh_model(pFit,R_xyh_S,r_xy_S,rCutOff,nBins);
+[R_xyh_model, VEM_num] = get_Rxyh_model(pFit,R_xyh_S,r_xy_S,rCutOff,nBins);
 
-% for i = 1:10
-%     subplot(1,2,1)
-%     imagesc(R_xyh(:,:,i));
-%     subplot(1,2,2)
-%     imagesc(R_xyh_model(:,:,i));
-%     pause;
-% end
+% variance explained by model
+VEM = 1-(VEM_num./var(r_xyh_S, 1, [3 2 1], 'omitnan'));
 
 %% VARIANCE EXPLAINED BY PLACE TUNING
- VE_place = 0;
-    count_VEP = 0;
+ VEP_num = 0;
+    VEP_count = 0;
      for rr=1:nBins
         for cc=1:nBins
             % grab the conditional ratemap now
@@ -183,12 +178,15 @@ options = optimset('Display','off','TolX',1e-8,'TolFun',1e-8);
              % find indices of finite bins
              crm_if = find(isfinite(crm_now));
              if ~isempty(crm_if)
-                  VE_place = VE_place + nansum((crm_now(crm_if) - r_xy_S(rr,cc)).^2); 
-                  count_VEP = count_VEP + length(crm_if);
+                 % mean squared error at each bin
+                  VEP_num = VEP_num + nansum((crm_now(crm_if) - r_xy_S(rr,cc)).^2); 
+                  VEP_count = VEP_count + length(crm_if);
              end
         end
      end
-VE_place = VE_place/count_VEP;
+VEP_num = VEP_num/VEP_count;
+VEP = 1-(VEP_num./var(r_xyh_S, 1, [3 2 1], 'omitnan'));
+
 
 %% MODULATION STRENGTH
 warning('off','all')
@@ -234,6 +232,7 @@ tuningStrength_RH = mean(reshape(MVL_RH, nBins^2,1), 'all', 'omitnan');
 %% PREPARE OUTPUTS
 % MODEL CLASS
 out.model.Rxyh = R_xyh_model;
+out.model.error = VEM_num;
 out.model.fitParams.g = pFit(1);
 out.model.fitParams.thetaP = mod(pFit(2),360)-180;
 out.model.fitParams.thetaP2 = pFit(2);
@@ -250,8 +249,8 @@ out.data.rxyS = r_xy_S;
 
 
 % MEASURES
-out.measures.VE.place = VE_place;
-out.measures.VE.RH = VE_model;
+out.measures.VE.place = VEP;
+out.measures.VE.RH = VEM;
 out.measures.MVL.HD = MVL;
 out.measures.MVL.RH = MVL_RH;
 out.measures.TS.HD = tuningStrength_HD;
@@ -315,7 +314,6 @@ out.info.bin.Y = y_bin_here;
 
     function initial = choose_initial_conditions(total_bins)
         % make a vector of all possible positions
-        step = 0.5;
         x_bins = 1:5.:total_bins;
         y_bins = 1:.5:total_bins;
         orientation = -180:1:180;
