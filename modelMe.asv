@@ -165,24 +165,13 @@ options = optimset('Display','off','TolX',1e-8,'TolFun',1e-8);
 % get model-predicted firing rates for best-fit parameters
 [R_xyh_model, VEM_num] = get_Rxyh_model(pFit,R_xyh_S,r_xy_S,rCutOff,nBins);
 
-% variance in r(x,y,H); excluding nans
-mean_rxyh = nanmean(r_xyh_S, 'all');
-linear_rxyh = reshape(r_xyh_S, 1000,1);
-VE_rxyh_count = 0; Var_rxyh = 0;
-for binbin = 1:length(linear_rxyh)
-    bin_now = linear_rxyh(binbin);
-    if ~isnan(bin_now)
-        Var_rxyh = Var_rxyh + nansum((bin_now - mean_rxyh)^2);
-        VE_rxyh_count = VE_rxyh_count+1;
-    end
-end
-VEM_den = Var_rxyh./VE_rxyh_count;
 % variance explained by model
+meanrxyh = 
+VEM_den = var(r_xyh_S, 0, 'all', 'omitnan');
 VEM = 1-(VEM_num./VEM_den);
 
-
 %% VARIANCE EXPLAINED BY PLACE TUNING
- VEP_fF = 0;
+ VEP_num = 0;
     VEP_count = 0;
      for rr=1:nBins
         for cc=1:nBins
@@ -192,13 +181,13 @@ VEM = 1-(VEM_num./VEM_den);
              crm_if = find(isfinite(crm_now));
              if ~isempty(crm_if)
                  % mean squared error at each bin
-                  VEP_fF = VEP_fF + nansum((crm_now(crm_if) - r_xy_S(rr,cc)).^2); 
+                  VEP_num = VEP_num + nansum((crm_now(crm_if) - r_xy_S(rr,cc)).^2); 
                   VEP_count = VEP_count + length(crm_if);
              end
         end
      end
-VEP_fF = VEP_fF/VEP_count;
-VEP = 1-(VEP_fF./VEM_den);
+VEP_num = VEP_num/VEP_count;
+VEP = 1-(VEP_num./var(r_xyh_S, 0, 'all', 'omitnan'));
 
 
 %% MODULATION STRENGTH
