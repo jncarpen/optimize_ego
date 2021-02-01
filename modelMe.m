@@ -94,13 +94,12 @@ for rr = 1:nBins
             idx_H = find(Z_idx_here == H);
                 
             % @criteria: animal must have occupied each angular bin for >=100 ms
-            if time_H >= .1 
+            if count_H >= 1 
                 % spiketimes in bin(x,y,H)
                 spk_H = spikes_here(idx_H);
 
                 % conditional rate, r(x,y,H)
                 r_xyh_here = sum(spk_H)./(count_H*tpf);
-                test(count) = r_xyh_here;
                 
                 if isfinite(r_xyh_here)
                     r_xyh(rr,cc,H) = r_xyh_here;
@@ -124,27 +123,6 @@ for rr = 1:nBins
     count = count + 1; 
 end
 
-% smooth ratemaps (?)
-r_xy_S = r_xy;
-r_xyh_S = r_xyh;
-R_xyh_S = R_xyh;
-
-% r_xy_S = smooth2a(r_xy,3,3);
-% for i=1:10
-%     r_xyh_S(:,:,i) = smooth2a(squeeze(r_xyh(:,:,i)),3,3);
-%     R_xyh_S(:,:,i) = smooth2a(squeeze(R_xyh(:,:,i)),3,3);
-% end
-% for i=1:10
-%     for j=1:10
-%         r_xyh_S(i,j,:)=smoothdata(squeeze(r_xyh_S(i,j,:)),3,'omitnan');
-%         R_xyh_S(i,j,:)=smoothdata(squeeze(R_xyh_S(i,j,:)),3,'omitnan');
-%     end
-% end
-
-% how correlated are the two maps?
-% corrcoef(squeeze(nanmean(r_xyh,3)),r_xy,'rows','complete')
-
-
 %% OPTIMIZATION
 % randomly choose some initial conditions
 p = choose_initial_conditions(nBins);
@@ -159,26 +137,37 @@ pFitLM = [p.g; p.thetaP; p.xref; p.yref];
 options = optimset('Display','off','TolX',1e-8,'TolFun',1e-8);
 
 % perform the optimization
-[pFit, ~]=fminsearch(@(pFit)aFitLMNew(pFit,R_xyh_S,r_xy_S,rCutOff,nBins),...
+[pFit, ~]=fminsearch(@(pFit)aFitLMNew(pFit,R_xyh,r_xy,rCutOff,nBins),...
     pFitLM,options);
 
 % get model-predicted firing rates for best-fit parameters
-[R_xyh_model, VEM_num] = get_Rxyh_model(pFit,R_xyh_S,r_xy_S,rCutOff,nBins);
+[R_xyh_model, fF] = get_Rxyh_model(pFit,R_xyh,r_xy,rCutOff,nBins);
+
+
+%% VARIANCE EXPLAINED BY MODEL (RH-TUNING)
+% match nan indices between Rmodel(x,y,H) and r(x,y,H)
+R_xyh_model_linear = reshape(R_xyh_model, nBins^3, 1);
+r_xyh_nan = reshape(r_xyh, nBins^3, 1);
+r_xyh_nan(find(isnan(R_xyh_model_linear))) = NaN;
+r_xyh_nan = reshape(r_xyh_nan, nBins, nBins,nBins);
 
 % variance in r(x,y,H); excluding nans
-mean_rxyh = nanmean(r_xyh_S, 'all');
-linear_rxyh = reshape(r_xyh_S, 1000,1);
-VE_rxyh_count = 0; Var_rxyh = 0;
-for binbin = 1:length(linear_rxyh)
-    bin_now = linear_rxyh(binbin);
-    if ~isnan(bin_now)
-        Var_rxyh = Var_rxyh + nansum((bin_now - mean_rxyh)^2);
-        VE_rxyh_count = VE_rxyh_count+1;
-    end
+mean_rxyh = mean(r_xyh_nan, 'all', 'omitnan');
+count_Var_rxyh = 0; fF_Var_rxyh = 0;
+for rr=1:nBins
+        for cc=1:nBins
+            tc_now = squeeze(r_xyh_nan(rr, cc, :));
+            crm_if = find(isfinite(tc_now));
+            if ~isempty(crm_if)
+                fF_Var_rxyh = fF_Var_rxyh + nansum((tc_now(crm_if) - mean_rxyh).^2);
+                count_Var_rxyh = count_Var_rxyh + length(crm_if);
+            end
+        end
 end
-VEM_den = Var_rxyh./VE_rxyh_count;
+var_rxyh = fF_Var_rxyh./count_Var_rxyh;
+
 % variance explained by model
-VEM = 1-(VEM_num./VEM_den);
+VEM = 1-(fF./var_rxyh);
 
 
 %% VARIANCE EXPLAINED BY PLACE TUNING
@@ -187,18 +176,18 @@ VEM = 1-(VEM_num./VEM_den);
      for rr=1:nBins
         for cc=1:nBins
             % grab the conditional ratemap now
-             crm_now = squeeze(r_xyh_S(rr, cc, :));
+             tc_now = squeeze(r_xyh(rr, cc, :));
              % find indices of finite bins
-             crm_if = find(isfinite(crm_now));
+             crm_if = find(isfinite(tc_now));
              if ~isempty(crm_if)
                  % mean squared error at each bin
-                  VEP_fF = VEP_fF + nansum((crm_now(crm_if) - r_xy_S(rr,cc)).^2); 
+                  VEP_fF = VEP_fF + nansum((tc_now(crm_if) - r_xy(rr,cc)).^2); 
                   VEP_count = VEP_count + length(crm_if);
              end
         end
      end
 VEP_fF = VEP_fF/VEP_count;
-VEP = 1-(VEP_fF./VEM_den);
+VEP = 1-(VEP_fF./var_rxyh);
 
 
 %% MODULATION STRENGTH
@@ -206,7 +195,7 @@ warning('off','all')
 for rr = 1:nBins
     for cc = 1:nBins
         % grab angular tuning curve in each spatial bin
-        tc_now = reshape(R_xyh_S(rr,cc,:), nBins, 1);
+        tc_now = reshape(R_xyh(rr,cc,:), nBins, 1);
         tc_now_RH = reshape(R_xyh_model(rr,cc,:), nBins, 1);
         
         % which bins are finite (~nan, ~inf)
@@ -245,20 +234,16 @@ tuningStrength_RH = mean(reshape(MVL_RH, nBins^2,1), 'all', 'omitnan');
 %% PREPARE OUTPUTS
 % MODEL CLASS
 out.model.Rxyh = R_xyh_model;
-out.model.error = VEM_num;
+out.model.error = fF;
 out.model.fitParams.g = pFit(1);
 out.model.fitParams.thetaP = mod(pFit(2),360)-180;
 out.model.fitParams.xref = pFit(3);
 out.model.fitParams.yref = pFit(4);
 
 % DATA CLASS
-out.data.Rxyh = R_xyh_S;
-out.data.rxyh = r_xyh_S;
-out.data.rxy = r_xy_S;
-% out.data.RxyhS = R_xyh_S;
-% out.data.rxyhS = r_xyh_S;
-% out.data.rxyS = r_xy_S;
-
+out.data.Rxyh = R_xyh;
+out.data.rxyh = r_xyh;
+out.data.rxy = r_xy;
 
 % MEASURES
 out.measures.VE.place = VEP;
@@ -275,8 +260,8 @@ out.info.bin.X = x_bin_here;
 out.info.bin.Y = y_bin_here;
 
 % FOR PABLO
-out.PJ.VEMnum = VEM_num;
-out.PJ.VEMden = VEM_den;
+out.PJ.VEMnum = fF;
+out.PJ.VEMden = var_rxyh;
 
 
 %% NESTED FUNCTIONS
@@ -309,10 +294,10 @@ out.PJ.VEMden = VEM_den;
                         % expected value
                         cBar = nanmean(cFac);
                         % shape the cosine
-                        z = 1+g*(cFac - cBar);
+                        z = 1+g.*(cFac - cBar);
                         z = z.*(z>0);
                         % variance explained
-                        fF = fF + nansum((z - rT(iF)).^2);                   
+                        fF = fF + nansum((z - rT(iF)).^2);  
                         angCount = angCount + length(iF);
                         % model firing rates
                         RXYHM(ii,jj,iF) = z;
@@ -340,6 +325,8 @@ out.PJ.VEMden = VEM_den;
         initial.xref = randsample(x_bins,howMany)';
         initial.yref = randsample(y_bins,howMany)';
     end
+
+    
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
