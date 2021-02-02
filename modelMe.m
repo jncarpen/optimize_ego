@@ -8,11 +8,11 @@ function [out] = modelMe(P, ST, Z)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % position info
 t = P(:,1); 
-y = P(:,3); x = P(:,2);
+x = P(:,2);
+y = P(:,3);
 
 % sampling frequency info
 tpf = mode(diff(t)); % time per frame (s)
-% fps = 1/tpf; % frames/sec (Hz)
 
 % remove spikes outside of viable range
 startTime = t(1); stopTime = t(end);
@@ -43,9 +43,9 @@ Z_bins = linspace(0,360,num_Z_bins+1);
 Z_bin_ctrs = ((diff(Z_bins)/2) + Z_bins(1:end-1))-180;
 
 %% GENERATE RATEMAPS
-r_xy = zeros(nBins,nBins).*NaN;
-r_xyh = zeros(nBins,nBins, nBins).*NaN;
-R_xyh = zeros(nBins,nBins, nBins).*NaN;
+r_xy = zeros(nBins,num_Z_bins).*NaN;
+r_xyh = zeros(nBins,nBins, num_Z_bins).*NaN;
+R_xyh = zeros(nBins,nBins, num_Z_bins).*NaN;
 
 count = 1;
 for rr = 1:nBins
@@ -94,7 +94,7 @@ for rr = 1:nBins
             idx_H = find(Z_idx_here == H);
                 
             % @criteria: animal must have occupied each angular bin for >=100 ms
-            if count_H >= 1 
+            if count_H > 0
                 % spiketimes in bin(x,y,H)
                 spk_H = spikes_here(idx_H);
 
@@ -149,22 +149,23 @@ options = optimset('Display','off','TolX',1e-8,'TolFun',1e-8);
 R_xyh_model_linear = reshape(R_xyh_model, nBins^3, 1);
 r_xyh_nan = reshape(r_xyh, nBins^3, 1);
 r_xyh_nan(find(isnan(R_xyh_model_linear))) = NaN;
-r_xyh_nan = reshape(r_xyh_nan, nBins, nBins,nBins);
+r_xyh_nan = reshape(r_xyh_nan, nBins, nBins, nBins);
 
 % variance in r(x,y,H); excluding nans
 mean_rxyh = mean(r_xyh_nan, 'all', 'omitnan');
-count_Var_rxyh = 0; fF_Var_rxyh = 0;
+count_Vrxyh = 0; 
+fF_Vrxyh = 0;
 for rr=1:nBins
         for cc=1:nBins
             tc_now = squeeze(r_xyh_nan(rr, cc, :));
-            crm_if = find(isfinite(tc_now));
-            if ~isempty(crm_if)
-                fF_Var_rxyh = fF_Var_rxyh + nansum((tc_now(crm_if) - mean_rxyh).^2);
-                count_Var_rxyh = count_Var_rxyh + length(crm_if);
+            finiteBins = find(isfinite(tc_now));
+            if ~isempty(finiteBins)
+                fF_Vrxyh = fF_Vrxyh + nansum((tc_now(finiteBins) - mean_rxyh).^2);
+                count_Vrxyh = count_Vrxyh + length(finiteBins);
             end
         end
 end
-var_rxyh = fF_Var_rxyh./count_Var_rxyh;
+var_rxyh = fF_Vrxyh./count_Vrxyh;
 
 % variance explained by model
 VEM = 1-(fF./var_rxyh);
@@ -178,11 +179,11 @@ VEM = 1-(fF./var_rxyh);
             % grab the conditional ratemap now
              tc_now = squeeze(r_xyh(rr, cc, :));
              % find indices of finite bins
-             crm_if = find(isfinite(tc_now));
-             if ~isempty(crm_if)
+             finiteBins = find(isfinite(tc_now));
+             if ~isempty(finiteBins)
                  % mean squared error at each bin
-                  VEP_fF = VEP_fF + nansum((tc_now(crm_if) - r_xy(rr,cc)).^2); 
-                  VEP_count = VEP_count + length(crm_if);
+                  VEP_fF = VEP_fF + nansum((tc_now(finiteBins) - r_xy(rr,cc)).^2); 
+                  VEP_count = VEP_count + length(finiteBins);
              end
         end
      end
@@ -240,6 +241,9 @@ out.model.fitParams.thetaP = mod(pFit(2),360)-180;
 out.model.fitParams.xref = pFit(3);
 out.model.fitParams.yref = pFit(4);
 
+out.rxyh = r_xyh_nan;
+out.Rxyh = R_xyh_model;
+
 % DATA CLASS
 out.data.Rxyh = R_xyh;
 out.data.rxyh = r_xyh;
@@ -259,11 +263,6 @@ out.measures.mu.RH = mu_RH;
 out.info.bin.X = x_bin_here;
 out.info.bin.Y = y_bin_here;
 
-% FOR PABLO
-out.PJ.VEMnum = fF;
-out.PJ.VEMden = var_rxyh;
-
-
 %% NESTED FUNCTIONS
     function [RXYHM, fF] = get_Rxyh_model(pFit,rF,rP,rCutOff,Nbins)
     % INPUT
@@ -272,6 +271,7 @@ out.PJ.VEMden = var_rxyh;
     %   rCutOff:    min firing rate for a bin to be considered
     %   Nbins:      number of bins of the discretization
     %   pFit:       [g; thetaP; xref; yref]; initial conditions of params.
+    %   by P. Jercog., modified by J. Carpenter
     
     % unroll pFit
     g = pFit(1);
