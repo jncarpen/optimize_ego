@@ -14,6 +14,9 @@ data_MVL(isnan(data_MVL))=0;
 model_MVL = out.measures.MVL.RH;
 model_MVL(isnan(model_MVL))=0;
 
+% todo: normalize the scaling
+% (data scale tends to be much higher)
+
 % define vector orientations
 u = cos(pred_val * pi/180); 
 v = sin(pred_val * pi/180);
@@ -39,29 +42,33 @@ binX = out.info.bin.X;
 binY = out.info.bin.Y;
 
 %% PLOT
-% figure; set(gcf,'color','w');
-hold on;
-% set(gca, 'visible', 'off')
-imagescwithnan(out.data.rxy,jet,[.7 .5 .7])% colorbar
-alpha(0.2) 
-brighten(.6)
-xlim([0 11]); ylim([0 11]);
 
-% plot data vectors
-modelVecs = quiver(binX, binY, uprime_data, vprime_data, 0);
-set(modelVecs, 'Color', 'blue', 'AutoScale', 'off', 'LineWidth',.5)
+if sum(~isnan(out.data.rxyN), 'all') > 1
+    % figure; set(gcf,'color','w');
+    hold on;
+    % set(gca, 'visible', 'off')
+    imagescwithnan(out.data.rxyN,jet,[.7 .5 .7])% colorbar
+    alpha(0.2) 
+    brighten(.6)
+    xlim([0 11]); ylim([0 11]);
 
-% plot model vectors
-modelVecs = quiver(binX, binY, uprime, vprime, 0);
-set(modelVecs, 'Color', 'r', 'AutoScale', 'off', 'LineWidth',.5)
+    % plot data vectors
+    modelVecs = quiver(binX, binY, uprime_data, vprime_data, 0);
+    set(modelVecs, 'Color', 'blue', 'AutoScale', 'off', 'LineWidth',.35)
 
-% put in the reference point if its not distance
-if xref>0 & xref<150 & yref>0 & yref<150
-    scatter(xref,yref,[10],'k','filled')
+    % plot model vectors
+    modelVecs = quiver(binX, binY, uprime, vprime, 0);
+    set(modelVecs, 'Color', 'r', 'AutoScale', 'off', 'LineWidth',.35)
+
+    % put in the reference point if its not distance
+    if xref>0 & xref<150 & yref>0 & yref<150
+        scatter(xref,yref,[10],'k','filled')
+    end
+else
+    [r,c] = size(out.data.rxyN);
+    imagesc(zeros(r,c));
 end
-
-% make the figure a square
-pbaspect([1 1 1])
-warning('on', 'all')
+    pbaspect([1 1 1])
+    warning('on', 'all')
 
 end
