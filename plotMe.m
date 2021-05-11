@@ -33,6 +33,7 @@ vprime = v.*sf;
 uprime_data = u_data.*sf_data; 
 vprime_data = v_data.*sf_data;
 
+
 % get rid of nan values in ratemap
 rm_vec = reshape(out.data.rxy',100,1);
 nan_idx = find(isnan(rm_vec));
@@ -44,17 +45,23 @@ binY = out.info.bin.Y;
 %% PLOT
 
 if sum(~isnan(out.data.rxyN), 'all') > 1
-    % figure; set(gcf,'color','w');
+    figure; set(gcf,'color','w');
     hold on;
-    % set(gca, 'visible', 'off')
-    imagescwithnan(out.data.rxyN,jet,[.7 .5 .7])% colorbar
+    set(gca, 'visible', 'off')
+    imagescwithnan(out.data.rxyN,jet,[1 1 1])% colorbar
+%     [.7 .5 .7]
     alpha(0.2) 
     brighten(.6)
     xlim([0 11]); ylim([0 11]);
-
+    
+    xline(0, 'LineWidth', 1, 'Color', [.8 .8 .8]);
+    xline(11, 'LineWidth', 1, 'Color', [.8 .8 .8]);
+    yline(0, 'LineWidth', 1, 'Color', [.8 .8 .8]);
+    yline(11, 'LineWidth', 1, 'Color', [.8 .8 .8]);
+    
     % plot data vectors
     modelVecs = quiver(binX, binY, uprime_data, vprime_data, 0);
-    set(modelVecs, 'Color', 'blue', 'AutoScale', 'off', 'LineWidth',.35)
+    set(modelVecs, 'Color', 'b', 'AutoScale', 'off', 'LineWidth',1)
 
     % plot model vectors
     modelVecs = quiver(binX, binY, uprime, vprime, 0);

@@ -1,15 +1,16 @@
 function [out] = modelMe(P, ST, Z)
 %MODELME_V2 
 %   INPUTS -
-%   P:         position vector [t, x1, y1, x2, y2];
+%   P:         position vector [t, x1, y1, x2, y2] or [t, x, y];
 %   ST:        spike times vector (s)
-%   Z:         angular variable, range (-180 to 180)
+%   Z:         angular variable, range 0 to 360 deg.
 %   J. Carpenter, 2021.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % position info
 t = P(:,1); 
 x = P(:,2);
 y = P(:,3);
+Z = mod((Z+180),360)-180; % shift + mirror
 
 % sampling frequency info
 tpf = mode(diff(t)); % time per frame (s)
@@ -19,8 +20,8 @@ startTime = t(1); stopTime = t(end);
 ST = ST(ST < stopTime & ST > startTime);
 
 % raw spike train
-t_edges = linspace(startTime,stopTime,numel(t)+1);
-SpkTrn = histcounts(ST,t_edges);
+t_edges = linspace(startTime,stopTime,numel(t)+1)';
+SpkTrn = histcounts(ST,t_edges)';
 
 % bin arena (10x10)
 nBins = 10;
@@ -49,11 +50,11 @@ r_xyh = zeros(nBins,nBins, num_Z_bins).*NaN;
 R_xyh = zeros(nBins,nBins, num_Z_bins).*NaN;
 time_H = zeros(nBins,nBins, num_Z_bins).*NaN;
 count_H = zeros(nBins,nBins, num_Z_bins).*NaN;
+Occ = cell(10,10);
 
 count = 1;
 for rr = 1:nBins
     for cc = 1:nBins
-        
         % what bin are we in now?
         x_bin_here(rr,cc) = cc; y_bin_here(rr,cc) = rr;
         
@@ -92,8 +93,8 @@ for rr = 1:nBins
                 % find indices when animal occupied this HD bin
                 idx_H = find(Z_idx_here == H);
 
-                % @criteria: animal must have occupied each angular bin for >=100 ms
-                if time_H(rr,cc,H) > .1
+                % @criteria: animal must have occupied each angular bin for >=500 ms
+                if time_H(rr,cc,H) > .5
                     % spiketimes in bin(x,y,H)
                     spk_H = spikes_here(idx_H);
 
@@ -102,8 +103,6 @@ for rr = 1:nBins
 
                     if isfinite(r_xyh_here)
                         r_xyh(rr,cc,H) = r_xyh_here;
-                        % otherwise the bin remains
-                        % a nan value
                     end
                 end
             end
@@ -111,7 +110,10 @@ for rr = 1:nBins
             r_xy(rr,cc) = nanmean(r_xyh(rr,cc,:));
             % conditional (normalized) ratemap
             R_xyh(rr,cc,:) = r_xyh(rr,cc,:)./r_xy(rr,cc);
+            % save occupancy map
+            Occ{rr,cc} = Z_count_here;
         else
+            Occ{rr,cc} = nan;
         end
         count = count + 1; 
     end 
@@ -119,13 +121,13 @@ end
 
 %% OPTIMIZATION
 % randomly choose some initial conditions
-% p = choose_initial_conditions(nBins);
+p = choose_initial_conditions(nBins);
 
-% choose initial conditions (manual)
-p.g = 0.25;
-p.thetaP = 0;
-p.xref = nanmax(x)/2;
-p.yref = nanmax(y)/2;
+% or choose initial conditions manually:
+% p.g = 0.25;
+% p.thetaP = 0;
+% p.xref = nanmax(x)/2;
+% p.yref = nanmax(y)/2;
 
 % min firing rate for a bin to be considered
 rCutOff = .5;
@@ -149,27 +151,29 @@ options = optimset('Display','off','TolX',1e-8,'TolFun',1e-8);
 
 %% VARIANCE EXPLAINED BY MODEL (RH-TUNING)
 % variance in r(x,y,H); excluding nans
-mean_Data = mean(rDatanan, 'all', 'omitnan');
-count = 0; 
-fF_Data = 0;
-for rr=1:nBins
-        for cc=1:nBins
-            tc_now = squeeze(rDatanan(rr, cc, :));
-            finiteBins = find(isfinite(tc_now));
-            if ~isempty(finiteBins)
-                fF_Data = fF_Data + nansum((tc_now(finiteBins) - mean_Data).^2);
-                count = count + length(finiteBins);
-            end
-        end
-end
-var_Data = fF_Data./count;
+% mean_Data = mean(rDatanan, 'all', 'omitnan');
+% count = 0; 
+% fF_Data = 0;
+% for rr=1:nBins
+%         for cc=1:nBins
+%             tc_now = squeeze(rDatanan(rr, cc, :));
+%             finiteBins = find(isfinite(tc_now));
+%             if ~isempty(finiteBins)
+%                 fF_Data = fF_Data + nansum((tc_now(finiteBins) - mean_Data).^2);
+%                 count = count + length(finiteBins);
+%             end
+%         end
+% end
 
+% var_Data = fF_Data./count;
+var_sub = nanvar(rDatanan(:)-R_xyh_model(:));
+var_Data = nanvar(rDatanan(:));
 % this line would do basically the same thing:
 % var(rDatanan(find(isfinite(rDatanan))))
-
+%  var(modelRateMap - rDatanan(find(isfinite(rDatanan))))
 % variance explained by model
-VEM = 1-(fF./var_Data);
-
+VEM = 1-(var_sub./var_Data);
+% VEM = 1-(fF./var_Data);
 
 %% VARIANCE EXPLAINED BY PLACE TUNING
  VEP_fF = 0;
@@ -188,6 +192,7 @@ VEM = 1-(fF./var_Data);
              end
         end
      end
+     % subtract using repmat
 VEP_fF = VEP_fF/VEP_count;
 VEP = 1-(VEP_fF./var_Data);
 
@@ -237,7 +242,8 @@ tuningStrength_RH = mean(reshape(MVL_RH, nBins^2,1), 'all', 'omitnan');
 out.model.Rxyh = R_xyh_model;
 out.model.error = fF;
 out.model.fitParams.g = pFit(1);
-out.model.fitParams.thetaP = mod(pFit(2),360)-180;
+% out.model.fitParams.thetaP = mod(pFit(2),360)-180;
+out.model.fitParams.thetaP = pFit(2);
 out.model.fitParams.xref = pFit(3);
 out.model.fitParams.yref = pFit(4);
 
@@ -249,6 +255,7 @@ out.data.RxyhN = RDatanan;
 out.data.rxyhN = rDatanan;
 out.data.rxyN = rxyDatanan;
 out.data.occ.count = count_H;
+out.data.occ.countmat = Occ;
 out.data.occ.time = time_H;
 
 % MEASURES
@@ -308,8 +315,7 @@ out.info.bin.Y = y_bin_here;
                         z = 1+g.*(cFac - cBar);
                         z = z.*(z>0);
                         % variance explained/SSE
-%                         fF = fF + nansum((z - rT(iF)).^2); 
-                        fF = fF + nansum((rT(iF) - z).^2); 
+                        fF = fF + nansum((z - rT(iF)).^2); 
                         angCount = angCount + length(iF);
                         % model firing rates
                         RXYHM(ii,jj,iF) = z;
