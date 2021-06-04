@@ -1,7 +1,9 @@
 # optimize_ego
 Fit neural data to a cosine function.
+Jordan Carpenter, 2021.
+
 ## 1. modelMe
-Use position, spike time, and angular information to search for a set of optimal parameters which describe the set of circumstances under which egocentric modulation of the unit is most likely. This function is modeled after the reference-heading model introducted in Pablo Jercog et al.'s work in 2019.
+Use position, spike time, and angular information to search for a set of optimal parameters which describe the set of circumstances under which egocentric modulation of the unit is most likely. This function is modeled after the reference-heading model introducted in Jercog et al.'s work in 2019. Thank you to Pablo Jercog for his input on this code. 
 
 > **Inputs:**
 > * **P:** X and Y coordinates of the moving agent (in centimeters). Format in the form [t x(LED1) y(LED1) x(LED2) y(LED2)] where t is a vector of timestamps (in seconds).
