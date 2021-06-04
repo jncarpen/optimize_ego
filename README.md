@@ -32,3 +32,12 @@ Use position, spike time, and angular information to search for a set of optimal
 >> * **out.measures.TS.RH:** 1x1 scalar; same as above, but for *out.measures.MVL.RH*.
 >> * **out.measures.mu.HD:** 10x10 matrix; preferred local head direction orientation. This is calculated circularly using the true angular tuning curves in each of 100 spatial bins.
 >> * **out.measures.mu.RH:** 10x10 matrix; same as above, but for [RH] model-predicted tuning curves.
+
+## 2. plotMe
+Generate and plot vector fields describing local head direction tuning for true and model-predicted tuning curves.
+
+> **Inputs:**
+> * **out:** structure which is delivered as an output of the *modelMe* function.
+
+## 3. gridSearch
+Hold egocentric reference point constant during optimization process to systematically sample points at the nodes of a circular meshgrid. This is used to compare with the prediction capabilities of reference point search using a linear-nonlinear modeling framework. (*in progress*).
